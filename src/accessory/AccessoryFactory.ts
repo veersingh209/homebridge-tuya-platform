@@ -40,6 +40,7 @@ import IRGenericAccessory from './IRGenericAccessory';
 import IRAirConditionerAccessory from './IRAirConditionerAccessory';
 import SecuritySystemAccessory from './SecuritySystemAccessory';
 import VibrationSensorAccessory from './VibrationSensorAccessory';
+import WeatherStationAccessory from './WeatherStationAccessory';
 import DoorbellAccessory from './DoorbellAccessory';
 import PetFeederAccessory from './PetFeederAccessory';
 
@@ -196,6 +197,9 @@ export default class AccessoryFactory {
         break;
       case 'wxml':
         handler = new DoorbellAccessory(platform, accessory);
+        break;
+      case 'qxj':
+        handler = new WeatherStationAccessory(platform, accessory);
         break;
 
       // Other
