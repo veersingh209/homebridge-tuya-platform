@@ -20,11 +20,10 @@ const SCHEMA_CODE = [
 export default class WindowCoveringAccessory extends BaseAccessory {
 
   requiredSchema() {
-    return [SCHEMA_CODE[0].TARGET_POSITION_CONTROL];//, SCHEMA_CODE[1].TARGET_POSITION_CONTROL];
+    return [SCHEMA_CODE[0].TARGET_POSITION_CONTROL];
   }
 
   configureServices() {
-
     let amount = 1;
     const schema = this.getSchema('control_2');
     if (schema) {
@@ -32,7 +31,6 @@ export default class WindowCoveringAccessory extends BaseAccessory {
     }
     this.log.warn('Curtain amount:', amount);
     for (let i = 0; i < amount; i++) {
-
       this.configureCurrentPosition(i);
       this.configurePositionState(i);
       if (this.getSchema(...SCHEMA_CODE[i].TARGET_POSITION_PERCENT)) {
@@ -73,33 +71,71 @@ export default class WindowCoveringAccessory extends BaseAccessory {
         this.log.warn('Unknown CurrentPosition:', status.value);
         return 50;
       });
+
+    // Update CurrentPosition when percent_state changes
+    if (currentSchema) {
+      this.device.on(`dp.update:${currentSchema.code}`, (value) => {
+        const position = limit(value as number, 0, 100);
+        service.updateCharacteristic(this.Characteristic.CurrentPosition, position);
+      });
+    }
   }
 
   configurePositionState(i : number) {
     const currentSchema = this.getSchema(...SCHEMA_CODE[i].CURRENT_POSITION);
-    const targetSchema = this.getSchema(...SCHEMA_CODE[i].TARGET_POSITION_PERCENT);
 
     const { DECREASING, INCREASING, STOPPED } = this.Characteristic.PositionState;
 
     const service = this.accessory.getService(SCHEMA_CODE[i].NAME) ||
        this.accessory.addService(this.Service.WindowCovering, SCHEMA_CODE[i].NAME, SCHEMA_CODE[i].NAME);
 
+    let lastPosition: number | null = null;
+
     service.getCharacteristic(this.Characteristic.PositionState)
       .onGet(() => {
-        if (!currentSchema || !targetSchema) {
+        if (!currentSchema) {
           return STOPPED;
         }
 
         const currentStatus = this.getStatus(currentSchema.code)!;
-        const targetStatus = this.getStatus(targetSchema.code)!;
-        if (targetStatus.value === 100 && currentStatus.value !== 100) {
+        const currentPosition = currentStatus.value as number;
+
+        if (lastPosition === null) {
+          lastPosition = currentPosition;
+          return STOPPED;
+        }
+
+        if (currentPosition > lastPosition) {
+          lastPosition = currentPosition;
           return INCREASING;
-        } else if (targetStatus.value === 0 && currentStatus.value !== 0) {
+        } else if (currentPosition < lastPosition) {
+          lastPosition = currentPosition;
           return DECREASING;
         } else {
           return STOPPED;
         }
       });
+
+    // Update PositionState when percent_state changes
+    if (currentSchema) {
+      this.device.on(`dp.update:${currentSchema.code}`, (value) => {
+        const currentPosition = value as number;
+        let newState: number;
+
+        if (lastPosition === null) {
+          newState = STOPPED;
+        } else if (currentPosition > lastPosition) {
+          newState = INCREASING;
+        } else if (currentPosition < lastPosition) {
+          newState = DECREASING;
+        } else {
+          newState = STOPPED;
+        }
+
+        lastPosition = currentPosition;
+        service.updateCharacteristic(this.Characteristic.PositionState, newState);
+      });
+    }
   }
 
   configureTargetPositionPercent(i : number) {
@@ -161,5 +197,4 @@ export default class WindowCoveringAccessory extends BaseAccessory {
         minStep: 50,
       });
   }
-
 }
